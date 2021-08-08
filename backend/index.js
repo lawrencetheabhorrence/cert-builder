@@ -4,8 +4,11 @@ const cors = require('cors')
 const ejs = require('ejs')
 const fs = require('fs')
 const puppeteer = require('puppeteer')
+const sqlite3 = require('sqlite3').verbose()
 app.use(cors())
 app.use(express.json())
+
+var db = new sqlite3.Database('test')
 
 const printPDF = async () => {
   const browser = await puppeteer.launch({ headless: true, executablePath: '/usr/bin/chromium' })
@@ -23,6 +26,11 @@ app.get('/', (req, res) => {
 
 app.post('/', async (req, res) => {
   console.log(req.body)
+  db.serialize(() => {
+    const stmt = db.prepare ('INSERT INTO certificates VALUES (?, ?, ?)')
+    stmt.run(req.body.firstname, req.body.lastname, req.body.course)
+    stmt.finalize()
+  })
   const html = await ejs.renderFile(req.body.templateFile, req.body.data, {async: true})
   fs.writeFile('./template.html', html, { flag: 'w' }, (err) => {
   if (err) throw err;
@@ -35,6 +43,11 @@ app.post('/', async (req, res) => {
 })
 
 const PORT = 3001
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on PORT ${PORT}`)
+})
+
+process.on('SIGINT', () => {
+  db.close()
+  server.close()
 })
